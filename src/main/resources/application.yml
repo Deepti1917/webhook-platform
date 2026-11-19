@@ -1,0 +1,89 @@
+# No secret has a default value on purpose: if one is missing the app refuses to start (fail fast)
+# instead of silently running with something guessable. See .env.example.
+
+spring:
+  application:
+    name: webhook-platform
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME}
+    # Runtime user: SELECT/INSERT/UPDATE/DELETE only (see docker/postgres-init).
+    username: ${APP_DB_USER}
+    password: ${APP_DB_PASSWORD}
+  flyway:
+    # Migrations run as the schema owner, never as the runtime user.
+    user: ${DB_OWNER_USER}
+    password: ${DB_OWNER_PASSWORD}
+  jpa:
+    open-in-view: false
+    show-sql: false
+    hibernate:
+      ddl-auto: validate        # Flyway owns the schema; Hibernate only checks it matches
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  threads:
+    virtual:
+      enabled: true
+  web:
+    resources:
+      add-mappings: false       # this is a JSON API: serve no static files at all
+
+server:
+  port: 8080
+  shutdown: graceful
+  max-http-request-header-size: 16KB
+  error:
+    include-message: never
+    include-stacktrace: never
+    include-binding-errors: never
+    include-exception: false     # boolean (unlike the others, which take never/always/on-param)
+    whitelabel:
+      enabled: false
+  # Only enable when running behind a reverse proxy you control. Otherwise clients can forge
+  # X-Forwarded-For and dodge per-IP rate limits.
+  forward-headers-strategy: ${FORWARD_HEADERS_STRATEGY:none}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics   # env, heapdump, beans, mappings, etc. are never exposed
+  endpoint:
+    health:
+      show-details: never
+      probes:
+        enabled: true
+  info:
+    env:
+      enabled: false
+
+logging:
+  level:
+    root: INFO
+    org.springframework.security: WARN
+    org.hibernate.SQL: WARN
+
+webhook:
+  admin-api-key: ${ADMIN_API_KEY}
+  encryption-key: ${SECRET_ENCRYPTION_KEY}
+  cors:
+    # Comma-separated exact origins, e.g. https://app.example.com. Empty = no browser origin allowed.
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:}
+  ssrf:
+    # DEV ONLY. Lets webhooks target http://localhost. Never enable in production.
+    allow-private-networks: ${ALLOW_PRIVATE_WEBHOOK_TARGETS:false}
+  rate-limit:
+    ip-per-minute: 300
+    tenant-per-minute: 600
+    auth-failures-per-minute: 10
+  delivery:
+    worker-enabled: ${WORKER_ENABLED:true}
+    batch-size: 50
+    poll-interval-ms: 1000
+    max-attempts: 6
+    base-delay: 10s
+    max-delay: 1h
+    connect-timeout: 5s
+    request-timeout: 10s
+    lease: 60s
